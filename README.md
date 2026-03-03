@@ -83,6 +83,10 @@ This repository is used for the **Level 2 – Yellow Belt** submission.
 
 ## Screenshots
 
+- **Wallet options (connect screen)**
+
+  ![Wallet options](screenshots/wallet-options.png)
+
 - **Wallet connected state**
 
   ![Wallet connected](screenshots/wallet-connected.png)
