@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import WalletConnect from './components/WalletConnect.jsx';
 import Balance from './components/Balance.jsx';
 import SendTransaction from './components/SendTransaction.jsx';
+import ContractCall from './components/ContractCall.jsx';
 
 const pageStyle = {
   minHeight: '100vh',
@@ -79,7 +80,10 @@ export default function App() {
               onBalanceChange={handleBalanceChange}
             />
           </div>
-          <SendTransaction publicKey={publicKey} balance={balance} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <SendTransaction publicKey={publicKey} balance={balance} />
+            <ContractCall publicKey={publicKey} />
+          </div>
         </div>
       </div>
     </div>

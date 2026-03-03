@@ -1,0 +1,1 @@
+/Users/hulyaozkul/Documents/GitHub/stellar-white-belt-dapp/contract/target/wasm32-unknown-unknown/release/increment_contract.wasm: /Users/hulyaozkul/Documents/GitHub/stellar-white-belt-dapp/contract/src/lib.rs

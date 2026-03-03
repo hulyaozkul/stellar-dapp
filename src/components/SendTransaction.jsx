@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { TransactionBuilder, Operation, Asset, Account } from '@stellar/stellar-sdk';
-import { signTransaction } from '@stellar/freighter-api';
 import {
   NETWORK_PASSPHRASE,
   isValidPublicKey,
@@ -8,6 +7,7 @@ import {
   fetchBaseFee,
   submitTransactionXdr
 } from '../stellar/stellarConfig';
+import { getWalletKit } from '../wallet/stellarWalletsKit';
 
 const containerStyle = {
   borderRadius: '0.75rem',
@@ -111,16 +111,20 @@ export default function SendTransaction({ publicKey, balance }) {
 
       const xdr = tx.toXDR();
 
+      const kit = getWalletKit();
       const TIMEOUT_MS = 120000;
       const signWithTimeout = async () => {
         const result = await Promise.race([
-          signTransaction(xdr, { networkPassphrase: NETWORK_PASSPHRASE }),
+          kit.signTransaction(xdr, {
+            address: publicKey,
+            networkPassphrase: NETWORK_PASSPHRASE
+          }),
           new Promise((_, reject) =>
             setTimeout(
               () =>
                 reject(
                   new Error(
-                    'Transaction signing timed out. Please approve or reject the request in the Freighter extension.'
+                    'Transaction signing timed out. Please approve or reject the request in your wallet.'
                   )
                 ),
               TIMEOUT_MS
@@ -128,7 +132,7 @@ export default function SendTransaction({ publicKey, balance }) {
           )
         ]);
         if (!result || result.error) {
-          throw new Error(result?.error || 'Transaction was not signed in Freighter.');
+          throw new Error(result?.error || 'Transaction was not signed in the wallet.');
         }
         return result.signedTxXdr;
       };
@@ -141,19 +145,37 @@ export default function SendTransaction({ publicKey, balance }) {
       setAmount('');
     } catch (err) {
       const msg = err?.message || '';
-      const detail =
-        err?.response?.detail ||
-        err?.response?.extras?.result_codes?.transaction ||
-        '';
-      const horizonMsg =
-        typeof detail === 'string'
-          ? detail
-          : detail
-          ? JSON.stringify(detail)
-          : '';
-      const display =
-        horizonMsg || msg || 'An error occurred while submitting the transaction.';
-      setError(display);
+      const txCode = err?.response?.extras?.result_codes?.transaction;
+      const opCodes = err?.response?.extras?.result_codes?.operations;
+
+      // Insufficient balance from network
+      if (txCode === 'tx_insufficient_balance' || (Array.isArray(opCodes) && opCodes.includes('op_underfunded'))) {
+        setError('Insufficient balance for this transaction.');
+      } else {
+        const detail =
+          err?.response?.detail ||
+          txCode ||
+          '';
+        const horizonMsg =
+          typeof detail === 'string'
+            ? detail
+            : detail
+            ? JSON.stringify(detail)
+            : '';
+
+        const lowerMsg = msg.toLowerCase();
+        const rejected =
+          lowerMsg.includes('reject') ||
+          lowerMsg.includes('denied') ||
+          lowerMsg.includes('user');
+
+        const display =
+          (rejected && 'The transaction was rejected in your wallet.') ||
+          horizonMsg ||
+          msg ||
+          'An error occurred while submitting the transaction.';
+        setError(display);
+      }
     } finally {
       setSubmitting(false);
     }

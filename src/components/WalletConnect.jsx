@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { isConnected, requestAccess, getAddress } from '@stellar/freighter-api';
+import { useState } from 'react';
+import { getWalletKit } from '../wallet/stellarWalletsKit';
 
 const containerStyle = {
   borderRadius: '0.75rem',
@@ -14,6 +14,7 @@ export default function WalletConnect({ publicKey, onConnect, onDisconnect }) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
+  const [selectedWalletName, setSelectedWalletName] = useState('');
 
   const shortKey = key =>
     key ? `${key.slice(0, 6)}...${key.slice(-6)}` : '';
@@ -23,26 +24,42 @@ export default function WalletConnect({ publicKey, onConnect, onDisconnect }) {
     setStatus('');
     setLoading(true);
     try {
-      const connected = await isConnected();
-      if (!connected?.isConnected) {
-        setError("Freighter extension not found. Please install Freighter and refresh the page.");
-        return;
+      const kit = getWalletKit();
+
+      await kit.openModal({
+        onWalletSelected: async option => {
+          try {
+            await kit.setWallet(option.id);
+            setSelectedWalletName(option.name || option.id || '');
+            const { address } = await kit.getAddress();
+            if (!address) {
+              setError('Wallet address could not be retrieved.');
+              return;
+            }
+            onConnect(address);
+            setStatus('Wallet connected.');
+          } catch (innerErr) {
+            const msg =
+              innerErr?.message ||
+              'The wallet rejected the request or is not available.';
+            setError(msg);
+          } finally {
+            setLoading(false);
+          }
+        }
+      });
+      // openModal may resolve without selecting a wallet
+      if (!publicKey && !selectedWalletName && !error) {
+        setStatus('No wallet selected.');
       }
-      setStatus('Waiting for wallet connection...');
-      const access = await requestAccess();
-      if (access?.error) {
-        setError(access.error?.message || 'Access was denied or Freighter is not responding.');
-        return;
-      }
-      const key = access?.publicKey || access?.address || '';
-      if (!key) {
-        setError('Wallet address could not be retrieved.');
-        return;
-      }
-      onConnect(key);
-      setStatus('Wallet connected.');
+      return;
     } catch (err) {
-      setError('Freighter extension not found or connection failed. Please install the extension and refresh the page.');
+      const msg = err?.message || '';
+      if (msg.toLowerCase().includes('wallet') && msg.toLowerCase().includes('not')) {
+        setError('No compatible wallet was found. Please install a supported wallet and try again.');
+      } else {
+        setError(msg || 'Wallet connection failed.');
+      }
     } finally {
       setLoading(false);
     }
@@ -52,36 +69,15 @@ export default function WalletConnect({ publicKey, onConnect, onDisconnect }) {
     onDisconnect();
     setStatus('Wallet disconnected.');
     setError('');
+    setSelectedWalletName('');
   };
-
-  useEffect(() => {
-    let cancelled = false;
-    const init = async () => {
-      try {
-        const connected = await isConnected();
-        if (!connected?.isConnected || cancelled || publicKey) return;
-        const addr = await getAddress();
-        const key = addr?.address || '';
-        if (key && !cancelled) {
-          onConnect(key);
-          setStatus('Cüzdan otomatik olarak bağlandı.');
-        }
-      } catch {
-        // Eklenti yok veya izin verilmemiş; sessizce atla
-      }
-    };
-    init();
-    return () => {
-      cancelled = true;
-    };
-  }, [onConnect, publicKey]);
 
   return (
     <div style={containerStyle}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center' }}>
         <div>
           <div style={{ fontSize: '0.75rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9ca3af' }}>
-            Freighter
+            {selectedWalletName || 'Wallet'}
           </div>
           <div style={{ marginTop: '0.25rem', fontSize: '1rem', fontWeight: 500, color: '#e5e7eb' }}>
             {publicKey ? 'Wallet connected' : 'Wallet not connected'}
